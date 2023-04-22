@@ -1,0 +1,190 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Greedy : AlgorithmBase
+{
+    public override void GeneratePath(Vector2Int startNodePos, Vector2Int endNodePos)
+    {
+        this.endNodePos = endNodePos;
+
+        if (AlgorithmController.ShowGeneration)
+        {
+            StartCoroutine(AsyncGeneration(startNodePos, endNodePos));
+        }
+        else if (AlgorithmController.Benchmark)
+        {
+            Benchmark(startNodePos, endNodePos);
+        }
+        else
+        {
+            SyncGeneration(startNodePos, endNodePos);
+        }
+    }
+
+    private Vector2Int endNodePos;
+
+    private int GetDistanceToGoal(Vector2Int nodePos) //manhattan distance
+    {
+        return Mathf.Abs(endNodePos.x - nodePos.x) + Mathf.Abs(endNodePos.y - nodePos.y);
+    }
+
+    private void SyncGeneration(Vector2Int startNodePos, Vector2Int endNodePos)
+    {
+        MinNodeHeap nodeHeap = new();
+
+        nodeHeap.Insert(new HeuristicPosPair(startNodePos, GetDistanceToGoal(startNodePos)));
+
+        GridNode startNode = GridController.GetNodeAtNodePos(startNodePos);        
+
+        startNode.isVisited = true;
+        startNode.MarkAsChanged();
+
+        while (nodeHeap.PeekMin().heuristic != int.MaxValue)
+        {
+            HeuristicPosPair current = nodeHeap.ExtractMin();
+
+            if (current.pos == endNodePos) //goal found
+            {
+                GeneratePathFromGoal(endNodePos);
+                return;
+            }
+
+            foreach (Vector2Int offset in childOffsets)
+            {
+                Vector2Int childPos = current.pos + offset;
+                HeuristicPosPair child = new(childPos, GetDistanceToGoal(childPos));
+                GridNode childNode = GridController.GetNodeAtNodePos(child.pos);
+
+                if (childNode.isVisited || childNode.nodeType != NodeType.empty)
+                {
+                    continue;
+                }
+
+                childNode.isVisited = true;
+                childNode.parentPosition = current.pos;
+
+                childNode.MarkAsChanged();
+
+                nodeHeap.Insert(child);
+            }
+        }
+
+
+        Debug.LogError("No path found");
+
+        AlgorithmController.AlgorithmIsRunning = false;
+    }
+
+    private IEnumerator AsyncGeneration(Vector2Int startNodePos, Vector2Int endNodePos)
+    {
+        MinNodeHeap nodeHeap = new();
+
+        nodeHeap.Insert(new HeuristicPosPair(startNodePos, GetDistanceToGoal(startNodePos)));
+
+        GridNode startNode = GridController.GetNodeAtNodePos(startNodePos);
+        startNode.isVisited = true;
+        startNode.MarkAsChanged();
+
+        while (nodeHeap.PeekMin().heuristic != int.MaxValue)
+        {
+            HeuristicPosPair current = nodeHeap.ExtractMin();
+
+            if (current.pos == endNodePos) //goal found
+            {
+                GeneratePathFromGoal(endNodePos);
+                yield break;
+            }
+
+            GridController.GetNodeAtNodePos(current.pos).ShowAsTemp();
+
+            foreach (Vector2Int offset in childOffsets)
+            {
+                Vector2Int childPos = current.pos + offset;
+                HeuristicPosPair child = new(childPos, GetDistanceToGoal(childPos));
+                GridNode childNode = GridController.GetNodeAtNodePos(child.pos);
+
+                if (childNode.isVisited || childNode.nodeType != NodeType.empty)
+                {
+                    continue;
+                }
+
+                childNode.isVisited = true;
+                childNode.parentPosition = current.pos;
+
+                childNode.MarkAsChanged();
+
+                nodeHeap.Insert(child);
+            }
+
+            yield return new WaitForSeconds(0.1f);
+        }
+
+
+        Debug.LogError("No path found");
+
+        AlgorithmController.AlgorithmIsRunning = false;
+    }
+
+    private void Benchmark(Vector2Int startNodePos, Vector2Int endNodePos)
+    {
+        stopwatch.Reset();
+
+        for (int i = 0; i < AlgorithmController.benchmarkIterations; i++)
+        {
+            NodesSearched = 0;
+            GridController.ResetGrid();
+
+            stopwatch.Start();
+
+            //------------- 
+            MinNodeHeap nodeHeap = new();
+
+            nodeHeap.Insert(new HeuristicPosPair(startNodePos, GetDistanceToGoal(startNodePos)));
+
+            GridNode startNode = GridController.GetNodeAtNodePos(startNodePos);
+            startNode.isVisited = true;
+            startNode.MarkAsChanged();
+
+            while (nodeHeap.PeekMin().heuristic != int.MaxValue)
+            {
+                HeuristicPosPair current = nodeHeap.ExtractMin();
+
+                if (current.pos == endNodePos) //goal found
+                {
+                    break;
+                }
+
+                NodesSearched++;
+
+                foreach (Vector2Int offset in childOffsets)
+                {
+                    Vector2Int childPos = current.pos + offset;
+                    HeuristicPosPair child = new(childPos, GetDistanceToGoal(childPos));
+                    GridNode childNode = GridController.GetNodeAtNodePos(child.pos);
+
+                    if (childNode.isVisited || childNode.nodeType != NodeType.empty)
+                    {
+                        continue;
+                    }
+
+                    childNode.isVisited = true;
+                    childNode.parentPosition = current.pos;
+
+                    childNode.MarkAsChanged();
+
+                    nodeHeap.Insert(child);
+                }
+            }
+            //-------------
+
+            stopwatch.Stop();
+        }
+
+        Path path = GeneratePathFromGoal(endNodePos);
+
+        AlgorithmController.DisplayBenchmark(stopwatch.ElapsedMilliseconds, NodesSearched, path.Count());
+
+        AlgorithmController.AlgorithmIsRunning = false;
+    }
+}
