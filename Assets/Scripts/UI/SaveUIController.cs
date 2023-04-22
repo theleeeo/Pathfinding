@@ -17,6 +17,8 @@ public class SaveUIController : MonoBehaviour
         }
 
         _instance = this;
+
+        transform = GetComponent<Transform>() as RectTransform;
     }
 
     private const float ACTIVE_POSITION = 0;
@@ -35,10 +37,7 @@ public class SaveUIController : MonoBehaviour
 
     [SerializeField] private RectTransform SaveUI;
 
-    //[SerializeField] private RectTransform SaveField;
-    //private bool SaveField_Active;
-    //private const float SAVEFIELD_ACTIVE_Y = -23;
-    //private const float SAVEFIELD_UNACTIVE_Y = 7;
+    private new RectTransform transform;
 
     [SerializeField] private RectTransform LoadField;
     private bool LoadField_Active;
@@ -62,13 +61,26 @@ public class SaveUIController : MonoBehaviour
     private List<GridImageController> gridImages = new();
     private int selectedGridIndex = -1;
 
+    private Vector2 screenSize;
+
     private void ScaleUp()
     {
         SaveUI.DOScale(ACTIVE_SCALE, 0.25f);
     }
 
+    private Vector2 GetCurrentScreenSize()
+    {
+        return new Vector2(Screen.width, Screen.height);
+    }
+
     private void Update()
     {
+        if (false == isActive && screenSize != GetCurrentScreenSize())
+        {
+            screenSize = GetCurrentScreenSize();
+            SetToDeactivePosition();
+        }
+
         if (true == toggleInputEnabled && Input.GetKeyDown(KeyCode.Tab))
         {            
             if (isActive) //deactivate
@@ -86,7 +98,10 @@ public class SaveUIController : MonoBehaviour
     {
         CameraController.canMove = true;
 
-        SaveUI.DOMoveRectX(UNACTIVE_POSITION, 0.5f);
+        float leftBorderX = -transform.sizeDelta.x / 2;
+        float halfSize = SaveUI.sizeDelta.x / 2 * UNACTIVE_SCALE;
+
+        SaveUI.DOMoveRectX(leftBorderX - halfSize, 0.5f);
         SaveUI.DOScale(UNACTIVE_SCALE, 0.25f);
         CancelInvoke(nameof(ScaleUp));
 
@@ -109,8 +124,19 @@ public class SaveUIController : MonoBehaviour
         UIController._instance.ActivateAll(false);
     }
 
+    private void SetToDeactivePosition()
+    {
+        float leftBorderX = -transform.sizeDelta.x / 2;
+        float halfSize = SaveUI.sizeDelta.x / 2 * UNACTIVE_SCALE;
+        SaveUI.anchoredPosition = new Vector3(leftBorderX - halfSize, 0);
+    }
+
     private void Start()
     {
+        screenSize = GetCurrentScreenSize();
+
+        SetToDeactivePosition();
+
         LoadSavedGridImages();
     }
 
